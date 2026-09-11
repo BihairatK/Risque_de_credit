@@ -49,7 +49,9 @@ pour des raisons de conformité fair-lending (le sexe et la nationalité sont de
 
 **7. Monitoring.** AUC, Gini, KS, PR-AUC, Brier Score, courbe de calibration et **PSI** (Population Stability Index) sont calculés entre train et test pour vérifier la stabilité du modèle avant tout déploiement.
 
+## Démonstration 
 L'ensemble est packagé dans une **application Streamlit** qui permet d'évaluer un dossier interactivement et d'explorer les onglets monitoring et explicabilité.
+Vous pouvez tester l'application en direct ici : https://risquedecredit-7ogjmvmhh3w3dirmf7qukm.streamlit.app/
 
 ## Enseignements tirés 
 
