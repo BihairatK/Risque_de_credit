@@ -28,7 +28,7 @@ Ce choix répond à plusieurs contraintes du projet :
 
 La contrepartie assumée : le dataset ne contient pas de revenu brut, ce qui a structuré une bonne partie des choix méthodologiques décrits plus bas.
 
-## Quelle démarche d'analyse a été suivie ?
+## Démarche d'analyse suivi ?
 
 **1. Préparation et lisibilité des données.** Les variables catégorielles codées numériquement (ex. `Payment Status of Previous Credit`) sont décodées en modalités lisibles, et les variables sensibles ou obsolètes, sexe/statut marital, nationalité étrangère, téléphone, sont **exclues des prédicteurs**
 pour des raisons de conformité fair-lending (le sexe et la nationalité sont des proxys de caractéristiques protégées), et conservées uniquement pour un monitoring d'équité en aval.
@@ -51,7 +51,7 @@ pour des raisons de conformité fair-lending (le sexe et la nationalité sont de
 
 L'ensemble est packagé dans une **application Streamlit** qui permet d'évaluer un dossier interactivement et d'explorer les onglets monitoring et explicabilité.
 
-## Enseignements tirés ?
+## Enseignements tirés 
 
 - **Le modèle discrimine bien les bons et mauvais dossiers** : AUC = 0,835, Gini = 0,670, KS = 0,524
   sur l'échantillon test hors apprentissage — des niveaux solides pour un scorecard sur seulement
@@ -65,7 +65,7 @@ L'ensemble est packagé dans une **application Streamlit** qui permet d'évaluer
   un piège classique qui aurait faussé le Credit Score et l'Expected Loss s'il n'avait pas été corrigé
   par le recalibrage de Platt.
 - **Le modèle est stable entre échantillons** : PSI train/test = 0,037, largement sous le seuil de
-  vigilance (0,10), et pas de dégradation notable de l'AUC entre train et test — signe que le modèle
+  vigilance (0,10), et pas de dégradation notable de l'AUC entre train et test, signe que le modèle
   ne sur-apprend pas sur ce jeu de données.
 - **Les bandes de risque se traduisent en politique économique concrète** : la segmentation par PD
   permet de faire varier marge tarifaire et plafond de crédit indicatif de façon cohérente avec le
@@ -87,18 +87,3 @@ L'ensemble est packagé dans une **application Streamlit** qui permet d'évaluer
    ce sont, avec la LGD et l'EAD simplifiées, les limites les plus importantes du prototype.
 5. **Mettre en place un monitoring récurrent** (AUC, PSI, calibration, taux d'acceptation) dès la mise
    en production, avec des seuils d'alerte définis à l'avance (PSI > 0,25, dégradation d'AUC > 0,05).
-
-## Limites et pistes d'amélioration
-
-- **LGD et EAD sont fortement simplifiées** (LGD binaire selon la présence d'une garantie, EAD assimilée
-  au montant du crédit). Un déploiement réel nécessiterait des modèles dédiés à la LGD, à l'EAD/CCF, et
-  la prise en compte des coûts de recouvrement.
-- **LTI et DTI restent des proxys** faute de revenu brut dans le dataset, à ne pas interpréter comme
-  des ratios financiers réels.
-- **Échantillon modeste (1 000 dossiers)** et données historiques (Allemagne, marks deutsches) : la
-  généralisation à un contexte bancaire actuel et à un autre marché resterait à valider.
-- Pistes pour la suite : comparaison avec XGBoost/LightGBM, validation croisée temporelle, backtesting
-  et analyse des migrations de score, tests de stress, explicabilité par SHAP, et industrialisation
-  (API de scoring, CI/CD, Model Registry).
-
-
