@@ -19,7 +19,7 @@ GERMAN_CREDIT_CSV = os.path.join(os.path.dirname(__file__), "german_credit.csv")
 
 
 CODEBOOK = {"Account Balance": {"new_name": "checking_account_status",
-                                "map": {1: "< 0 DM", 2: "0-200 DM", 3: ">= 200 DM / salaire domicilie", 4: "Pas de compte courant"},
+                                "map": {1: "< 0 €", 2: "0-200 €", 3: ">= 200 D€ / salaire domicilié", 4: "Pas de compte courant"},
             },
             "Payment Status of Previous Credit": {"new_name": "credit_history",
                                                   "map": {0: "Aucun credit / tout rembourse",
@@ -34,8 +34,8 @@ CODEBOOK = {"Account Balance": {"new_name": "checking_account_status",
                                 8: "Formation", 9: "Business", 10: "Autre"},
             },
             "Value Savings/Stocks": {"new_name": "savings_status",
-                                     "map": {1: "< 100 DM", 2: "100-500 DM", 3: "500-1000 DM", 
-                                             4: ">= 1000 DM", 5: "Inconnu / pas d'epargne"},
+                                     "map": {1: "< 100 €", 2: "100-500 €", 3: "500-1000 €", 
+                                             4: ">= 1000 €", 5: "Inconnu / pas d'epargne"},
             },
             "Length of current employment": {"new_name": "employment_since",
                                              "map": {1: "Sans emploi", 2: "< 1 an", 
@@ -407,7 +407,7 @@ def render_app():
             st.subheader("Le prêt demande")
             col3, col4 = st.columns(2)
             with col3:
-                credit_amount = st.number_input("Montant du crédit (DM)", 250, 20000, 3000, step=100)
+                credit_amount = st.number_input("Montant du crédit (€)", 250, 20000, 3000, step=100)
                 duration_months = st.number_input("Durée (mois)", 4, 72, 24)
             with col4:
                 purpose = st.selectbox("Objet du crédit", list(CODEBOOK["Purpose"]["map"].values()))
@@ -440,7 +440,7 @@ def render_app():
             c1.metric("Credit Score", f"{result['credit_score']:.0f}")
             c2.metric("Probability of Default", f"{result['PD']:.2%}")
             c3.metric("Decision", result["decision"])
-            c4.metric("Expected Loss", f"{result['expected_loss']:,.0f} DM")
+            c4.metric("Expected Loss", f"{result['expected_loss']:,.0f} €")
 
             color = {"ACCEPTE": "green", "REVUE": "orange", "REFUSE": "red"}[result["decision"]]
             st.markdown(f"**Decision automatique : :{color}[{result['decision']}]**")
@@ -453,7 +453,7 @@ def render_app():
                 st.write(f"- LTI (credit / revenu annuel, proxy) : {result['LTI']:.2f}")
                 st.write(f"- DTI (endettement global, proxy) : {result['DTI']:.1%}")
                 st.write(f"- LGD retenue : {result['LGD']:.0%} (selon garantie/bien/garant)")
-                st.write(f"- EAD retenue : {result['EAD']:,.0f} DM")
+                st.write(f"- EAD retenue : {result['EAD']:,.0f} €")
                 st.caption("LTI/DTI sont des proxys documentes : le German Credit ne fournit pas de revenu "
                            "brut. A valider sur des donnees reelles avant tout usage en production ")
 
@@ -486,27 +486,24 @@ def render_app():
 
         st.markdown("##### Feuille de route monitoring en production")
         st.markdown(
-            "- Suivi periodique : AUC/Gini, KS, calibration de la PD, taux de defaut observe, PSI, "
-            "taux d'acceptation, stabilite des variables d'entree.\n"
-            "- Alertes automatiques si PSI > 0.25, degradation d'AUC > 0.05, ou derive du taux "
+            "- Suivi periodique : AUC/Gini, KS, calibration de la PD, taux de défaut observé, PSI, "
+            "taux d'acceptation, stabilité des variables d'entree.\n"
+            "- Alertes automatiques si PSI > 0.25, dégradation d'AUC > 0.05, ou dérive du taux "
             "d'acceptation.\n"
-            "- Backtesting periodique de la PD par cohorte et analyse des migrations de score."
+            "- Backtesting périodique de la PD par cohorte et analyse des migrations de score."
         )
         with st.expander("Limites assumees de ce prototype"):
              st.markdown(
-                "- **LGD** et **EAD** sont simplifiees (LGD binaire selon garantie, EAD = montant du "
-                "credit) : un vrai deploiement necessite des modeles LGD/EAD/CCF dedies, tenant compte "
-                "des couts de recouvrement et de l'evolution de l'exposition.\n"
+                "- **LGD** et **EAD** sont simplifiées (LGD binaire selon garantie, EAD = montant du "
+                "credit).\n"
                 "- **DTI/LTI** sont des proxys : le German Credit Data ne fournit pas de revenu brut.\n"
-                "- Comparaison avec XGBoost/LightGBM, validation croisee temporelle, tests de stress et "
-                "documentation de validation independante restent a faire pour un usage reglementaire."
             )
 
     with tab_explain:
         st.subheader("Contribution des variables au score")
         st.caption("Coefficients de la regression logistique (variables WoE). Les variables comportementales "
-                   f"(historique de credit, compte courant, epargne, nombre de credits) sont affichees avec la "
-                   f"surcouche d'importance metier (x{BEHAVIORAL_POINTS_BOOST}) appliquee a l'affichage des "
+                   f"(historique de credit, compte courant, epargne, nombre de credits) sont afficées avec la "
+                   f"surcouche d'importance metier (x{BEHAVIORAL_POINTS_BOOST}) appliquée a l'affichage des "
                    f"points de scorecard."
         )
         st.bar_chart(artifacts["coef_series"].sort_values())
