@@ -759,7 +759,7 @@ def decision_card(result):
 def render_sidebar(artifacts):
     with st.sidebar:
         st.markdown('<div class="sidebar-brand">🏦 Risque de Crédit</div>', unsafe_allow_html=True)
-        st.markdown('<div class="sidebar-sub">Platforme d'Analyse de Risque</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sidebar-sub">Platforme d Analyse de Risque</div>', unsafe_allow_html=True)
         st.divider()
 
         st.markdown('<div class="sidebar-section">Architecture</div>', unsafe_allow_html=True)
