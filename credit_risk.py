@@ -70,7 +70,7 @@ NUMERIC_RENAME = {"Duration of Credit (month)": "duration_months",
                   "No of dependents": "dependents",
 }
 
-EXCLUDED_RAW_COLUMNS = ["Sex & Marital Status", "Foreign Worker", "Telephone"] # données protegees / obsolète
+EXCLUDED_RAW_COLUMNS = ["Sex & Marital Status", "Foreign Worker", "Telephone"] # données protegées / obsolète
 
 # Milieu de bracket approximatif (en % du revenu disponible) pour la variable "Instalment per cent",
 INSTALLMENT_RATE_MIDPOINT = {1: 0.10, 2: 0.20, 3: 0.30, 4: 0.40}
@@ -84,17 +84,9 @@ BEHAVIORAL_POINTS_BOOST = 1.3
 
 
 def load_and_prepare_data(csv_path):
-    """Charge le German Credit Data et retourne un DataFrame decode et pret pour le feature engineering.
-
-    Le chargement est volontairement robuste aux colonnes d'index ajoutees par
-    Streamlit, Excel ou une sauvegarde intermediaire du DataFrame.
-    """
+    """Charge le German Credit Data et retourne un DataFrame decode et pret pour le feature engineering"""
     raw = pd.read_csv(csv_path)
 
-    # Nettoyage des noms de colonnes. Certaines versions/sauvegardes de
-    # Streamlit peuvent ajouter une colonne technique du type
-    # ``index -- streamlit-generated``. Elle ne fait pas partie du dataset
-    # German Credit et ne doit jamais entrer dans le pipeline.
     raw.columns = raw.columns.astype(str).str.strip()
     technical_index_cols = {
         "index -- streamlit-generated",
@@ -107,17 +99,13 @@ def load_and_prepare_data(csv_path):
     )
 
     # Verification explicite des colonnes necessaires avant de poursuivre.
-    required_columns = set(CODEBOOK.keys()) | set(NUMERIC_RENAME.keys()) | {
-        "Creditability",
-        "Sex & Marital Status",
-        "Foreign Worker",
+    required_columns = set(CODEBOOK.keys()) | set(NUMERIC_RENAME.keys()) | {"Creditability",
+                                                                            "Sex & Marital Status",
+                                                                            "Foreign Worker",
     }
     missing = sorted(required_columns - set(raw.columns))
     if missing:
-        raise ValueError(
-            "Le fichier german_credit.csv ne contient pas toutes les colonnes "
-            "attendues. Colonnes manquantes : " + ", ".join(missing)
-        )
+        raise ValueError("Le fichier german_credit.csv ne contient pas toutes les colonnes attendues. Colonnes manquantes : " + ", ".join(missing))
 
     df = pd.DataFrame(index=raw.index)
     df["default"] = 1 - raw["Creditability"]  # Creditability=1 -> bon payeur ; on veut default=1 = mauvais payeur
@@ -131,32 +119,27 @@ def load_and_prepare_data(csv_path):
    
     ## Feature engineering - Capacite de remboursement 
    
-    # PTI (Payment-to-Income) : directement disponible via le bracket "Instalment per cent",
-    # qui encode par construction la mensualite en % du revenu disponible.
+    # PTI (Payment-to-Income) : directement disponible via le bracket "Instalment per cent"
     df["PTI"] = df["installment_rate_pct_bracket"].map(INSTALLMENT_RATE_MIDPOINT)
 
-    # LTI (Loan-to-Income) : le German Credit ne fournit pas de revenu annuel ; on approxime une
-    # "intensite d'endettement" a partir du montant du credit rapporte a sa duree et au PTI (plus le
-    # PTI est eleve pour un meme montant, plus le revenu implicite est faible -> LTI plus eleve).
+    # LTI (Loan-to-Income) : le German Credit ne fournit pas de revenu annuel ; on approxime une "intensite d'endettement" à partir du montant du 
+    # credit rapporte à sa duree et au PTI (plus le PTI est eleve pour un meme montant, plus le revenu implicite est faible -> LTI plus eleve).
     monthly_installment_proxy = df["credit_amount"] / df["duration_months"]
     implied_monthly_income_proxy = (monthly_installment_proxy / df["PTI"]).clip(lower=1)
     df["LTI"] = (df["credit_amount"] / (implied_monthly_income_proxy * 12)).clip(0, 8)
 
-    # DTI (Debt-to-Income) : composite d'endettement global = PTI (mensualite du pret demande)
-    # + une majoration si le client a deja d'autres credits en cours (banque/magasin) ou plusieurs
-    # credits existants dans cette banque. Explicitement documente comme un PROXY, pas un vrai DTI
+    # DTI (Debt-to-Income) : composite d'endettement global = PTI (mensualité du prêt demande) + une majoration si le client a déja d'autres credits 
+    # en cours (banque/magasin) ou plusieurs credits existants dans cette banque. Explicitement documenté comme un PROXY, pas un vrai DTI
     other_debt_flag = (df["other_installment_plans"] != "Aucun autre credit").astype(float)
     df["DTI"] = (df["PTI"] + 0.05 * other_debt_flag
                  + 0.03 * (df["existing_credits_count"] - 1).clip(lower=0)).clip(0, 3)
 
-    # Proxy de garantie pour la LGD : un bien immobilier ou une epargne/assurance-vie, ou un garant,
-    # reduisent la perte en cas de defaut.
+    # Proxy de garantie pour la LGD : un bien immobilier ou une epargne/assurance-vie, ou un garant, reduisent la perte en cas de défaut.
     df["has_collateral"] = (df["property"].isin(["Bien immobilier", "Epargne / assurance-vie"])
                             | (df["guarantors"] != "Aucun")
     )
 
-    # Conserve les variables protegees/proxy uniquement pour le monitoring de fairness (jamais
-    # utilisees comme predicteurs, cf. EXCLUDED_RAW_COLUMNS ci-dessus).
+    # Conserve les variables protégées/proxy uniquement pour le monitoring de fairness (jamais utilisees comme predicteurs, cf. EXCLUDED_RAW_COLUMNS ci-dessus)
     df["_sex_marital_status_monitoring_only"] = raw["Sex & Marital Status"]
     df["_foreign_worker_monitoring_only"] = raw["Foreign Worker"]
 
@@ -172,7 +155,6 @@ CANDIDATE_CATEGORICAL = ["checking_account_status", "credit_history", "purpose",
 
 
 # 2. WoE / IV
-
 def compute_woe_iv(data, feature, target="default", bins=5, is_numeric=True):
     d = data[[feature, target]].copy()
     if is_numeric:
@@ -228,7 +210,6 @@ def apply_woe(data, features, maps, edges):
 
 
 # 3. Entrainement complet (donnees -> modeles -> calibration -> scorecard -> monitoring)
-
 def ks_statistic(y_true, y_score):
     fpr, tpr, _ = roc_curve(y_true, y_score)
     return float(np.max(np.abs(tpr - fpr)))
@@ -252,7 +233,7 @@ def pd_to_credit_score(pd_value, base_score=650, base_odds=15, pdo=40):
     return offset + factor * np.log(odds)
 
 
-@st.cache_resource(show_spinner="Entrainement du modele de risque de credit...")
+@st.cache_resource(show_spinner="Entraînement du modèle de risque de crédit...")
 def train_pipeline(csv_path: str = GERMAN_CREDIT_CSV):
     df = load_and_prepare_data(csv_path)
 
@@ -265,7 +246,7 @@ def train_pipeline(csv_path: str = GERMAN_CREDIT_CSV):
         iv_results[f] = iv
     iv_table = pd.Series(iv_results).sort_values(ascending=False).rename("IV").to_frame()
 
-    # Selection par IV (> 0.02), en forcant l'inclusion des variables comportementales cles
+    # Selection par IV (> 0.02), en forcant l'inclusion des variables comportementales clés
     selected = set(iv_table[iv_table["IV"] > 0.02].index) | set(FORCED_BEHAVIORAL_FEATURES)
     selected_features = [f for f in iv_table.index if f in selected]
 
@@ -320,8 +301,7 @@ def train_pipeline(csv_path: str = GERMAN_CREDIT_CSV):
     }
     calib_curve = calibration_curve(y_test, pd_test, n_bins=8, strategy="quantile")
 
-    # Explicabilite : coefficients (avec surcouche "boost" sur les variables comportementales
-    # pour la lecture des points de scorecard uniquement, cf. BEHAVIORAL_POINTS_BOOST)
+    # Explicabilite : coefficients (avec surcouche "boost" sur les variables comportementales pour la lecture des points de scorecard uniquement)
     coef_series = pd.Series(scorecard_model.coef_[0], index=X_train.columns)
     display_coef = coef_series.copy()
     for f in FORCED_BEHAVIORAL_FEATURES:
@@ -336,7 +316,7 @@ def train_pipeline(csv_path: str = GERMAN_CREDIT_CSV):
     # Politique economique du risque : segmentation en bandes de PD, avec
     # une proposition de marge tarifaire et de plafond de credit indicative par bande
     risk_bands = pd.cut(pd_test, bins=[0, 0.05, 0.10, 0.20, 0.35, 1.0],
-                         labels=["Tres faible", "Faible", "Modere", "Eleve", "Tres eleve"])
+                         labels=["Très faible", "Faible", "Modéré", "Elevé", "Très élevé"])
     pricing_policy = pd.DataFrame({"PD": pd_test, "band": risk_bands, "default": y_test.values}).groupby("band", observed=True
                                                                                                 ).agg(nb_dossiers=("PD", "count"), PD_moyenne=("PD", "mean"), taux_defaut_observe=("default", "mean"))
     pricing_policy["marge_risque_suggeree_pct"] = (pricing_policy["PD_moyenne"] * 0.45 * 100).round(2)  # PD x LGD indicative x marge
@@ -356,7 +336,6 @@ def train_pipeline(csv_path: str = GERMAN_CREDIT_CSV):
 
 
 # 4. Scoring d'un dossier individuel
-
 def compute_ratios(credit_amount, duration_months, installment_rate_code, other_debt, existing_credits_count):
     pti = INSTALLMENT_RATE_MIDPOINT[installment_rate_code]
     monthly_installment_proxy = credit_amount / duration_months
@@ -367,8 +346,7 @@ def compute_ratios(credit_amount, duration_months, installment_rate_code, other_
 
 
 def score_client(raw_inputs: dict, artifacts: dict):
-    """raw_inputs doit fournir toutes les variables brutes (memes noms que selected_features,
-    plus les champs necessaires au calcul des ratios et de l'EL)."""
+    """raw_inputs doit fournir toutes les variables brutes (memes noms que selected_features, plus les champs necessaires au calcul des ratios et de l'EL)."""
 
     ratios = compute_ratios(raw_inputs["credit_amount"], raw_inputs["duration_months"],
                             raw_inputs["installment_rate_code"], raw_inputs["other_debt_elsewhere"],
@@ -400,7 +378,6 @@ def score_client(raw_inputs: dict, artifacts: dict):
 
 
 # 5. Interface Streamlit
-
 import base64
 from pathlib import Path
 
@@ -408,7 +385,6 @@ BANK_BACKGROUND = os.path.join(os.path.dirname(__file__), "bank_background.jpg")
 
 
 def _get_bank_image_data(image_path):
-    """Retourne l'image bancaire en Data URI Base64."""
     if not os.path.exists(image_path):
         return None
     encoded = base64.b64encode(Path(image_path).read_bytes()).decode("utf-8")
@@ -416,14 +392,12 @@ def _get_bank_image_data(image_path):
 
 
 def _hero_image_html(image_path):
-    """Construit l'image bancaire plein format du Hero."""
     image_data = _get_bank_image_data(image_path)
     if image_data is None: 
         return ""
-    return (
-        '<img class="hero-bank-image" '
-        f'src="{image_data}" '
-        'alt="Architecture bancaire">'
+    return ('<img class="hero-bank-image" '
+            f'src="{image_data}" '
+            'alt="Architecture bancaire">'
     )
 
 
@@ -432,48 +406,29 @@ APP_CSS = """
 .block-container { padding-top: 1.25rem; padding-bottom: 3rem; max-width: 1480px; }
 body { background: #f4f8fc; }
 
-/* ========================= SIDEBAR ========================= */
+/* SIDEBAR */
 [data-testid="stSidebar"] { background: linear-gradient(180deg, #06203e 0%, #071a31 100%); border-right: 1px solid rgba(255,255,255,.08); }
 [data-testid="stSidebar"] * { color: #e7eef8; }
 [data-testid="stSidebar"] .stCaption { color: #9fb3ca !important; }
 
-/* ========================= HERO ========================= */
-.hero {
-    position: relative;
-    overflow: hidden;
-    min-height: 265px;
-    margin-bottom: 18px;
-    padding: 0;
-    border-radius: 24px;
-    border: 1px solid rgba(255,255,255,.16);
-    background: #062747;
-    box-shadow: 0 16px 42px rgba(15,23,42,.16);
+.hero {position: relative; overflow: hidden; min-height: 265px;
+       margin-bottom: 18px; padding: 0; border-radius: 24px;
+       border: 1px solid rgba(255,255,255,.16); 
+       background: #062747;
+       box-shadow: 0 16px 42px rgba(15,23,42,.16);
 }
-.hero-bank-image {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: center center;
-    display: block;
-    z-index: 0;
+.hero-bank-image {position: absolute; inset: 0;
+                  width: 100%; height: 100%;
+                  object-fit: cover;
+                  object-position: center center;
+                  display: block; z-index: 0; 
 }
-.hero-image-overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    pointer-events: none;
-    background: linear-gradient(90deg, rgba(3,27,54,.94) 0%, rgba(3,27,54,.82) 28%, rgba(3,27,54,.48) 55%, rgba(3,27,54,.16) 78%, rgba(3,27,54,.04) 100%);
+.hero-image-overlay {position: absolute; inset: 0; z-index: 1; pointer-events: none;
+                     background: linear-gradient(90deg, rgba(3,27,54,.94) 0%, rgba(3,27,54,.82) 28%, rgba(3,27,54,.48) 55%, rgba(3,27,54,.16) 78%, rgba(3,27,54,.04) 100%);
 }
-.hero-content {
-    position: relative;
-    z-index: 3;
-    width: 80%;
-    min-height: 265px;
-    padding: 34px 34px 30px;
-    color: white;
-    box-sizing: border-box;
+.hero-content {position: relative; z-index: 3; width: 80%;
+               min-height: 265px; padding: 34px 34px 30px;
+               color: white; box-sizing: border-box;
 }
 .hero-kicker { display:inline-block; padding:6px 12px; border-radius:999px; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.18); color:#dbeafe; font-size:.74rem; font-weight:800; letter-spacing:.10em; text-transform:uppercase; }
 .hero-title { font-size:2.65rem; font-weight:850; line-height:1.08; margin:13px 0 8px; text-shadow:0 2px 12px rgba(0,0,0,.18); }
@@ -481,7 +436,6 @@ body { background: #f4f8fc; }
 .hero-pills { margin-top:18px; }
 .hero-pill { display:inline-block; margin-right:7px; padding:6px 10px; border-radius:999px; background:rgba(255,255,255,.11); border:1px solid rgba(255,255,255,.18); color:#f8fbff; font-size:.72rem; font-weight:700; }
 
-/* ========================= CARDS ========================= */
 .kpi-card,.panel-card,.decision-card,.portfolio-card { border:1px solid rgba(148,163,184,.23); border-radius:18px; background:rgba(255,255,255,.96); box-shadow:0 8px 26px rgba(15,23,42,.055); }
 .kpi-card { padding:15px 17px; min-height:108px; }
 .kpi-label { font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:#64748b; }
@@ -491,7 +445,6 @@ body { background: #f4f8fc; }
 .panel-title { font-size:1rem; font-weight:800; color:#0b2a50; }
 .panel-subtitle { font-size:.78rem; color:#64748b; margin-top:2px; }
 
-/* ========================= DECISION ========================= */
 .decision-card { min-width: 0; width: 100%; max-width: 100%; overflow: hidden; box-sizing: border-box;}
 .decision-grid {display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: 18px; align-items: center; width: 100%;}
 .decision-grid > div {min-width: 0; max-width: 100%; box-sizing: border-box;}
@@ -501,18 +454,15 @@ body { background: #f4f8fc; }
 .status-dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:7px; }
 .status-accept { background:#16a34a; } .status-review { background:#f59e0b; } .status-refuse { background:#ef4444; }
 
-/* ========================= SCORE GAUGE ========================= */
 .score-gauge { margin-top:16px; }
 .score-track { height:13px; border-radius:999px; background:linear-gradient(90deg,#ef4444 0%,#f59e0b 42%,#22c55e 70%,#0f9f88 100%); position:relative; }
 .score-marker { position:absolute; top:-5px; width:4px; height:23px; border-radius:4px; background:#08264b; box-shadow:0 0 0 3px rgba(255,255,255,.92); }
 .score-labels { display:flex; justify-content:space-between; color:#64748b; font-size:.68rem; margin-top:5px; }
 
-/* ========================= MINI METRICS ========================= */
 .mini-metric { border:1px solid #e2e8f0; border-radius:13px; padding:11px 12px; background:#f8fafc; }
 .mini-label { font-size:.68rem; color:#64748b; }
 .mini-value { font-size:1.1rem; font-weight:850; color:#0b2a50; margin-top:3px; }
 
-/* ========================= SIDEBAR CARDS ========================= */
 .sidebar-brand { font-size:1.22rem; font-weight:850; color:white; }
 .sidebar-sub { color:#9fb3ca; font-size:.74rem; }
 .sidebar-section { margin-top:20px; color:#8ea8c3; font-size:.68rem; text-transform:uppercase; letter-spacing:.1em; font-weight:800; }
@@ -520,22 +470,19 @@ body { background: #f4f8fc; }
 .sidebar-value { color:#fff; font-weight:750; font-size:.84rem; }
 .sidebar-note { color:#9fb3ca; font-size:.70rem; line-height:1.45; }
 
-/* ========================= FORMS / TABLES ========================= */
+/* FORMS / TABLES */ 
 div[data-testid="stForm"] { border:1px solid rgba(148,163,184,.24); border-radius:18px; padding:22px; background:rgba(255,255,255,.96); box-shadow:0 8px 26px rgba(15,23,42,.045); }
 button[kind="primaryFormSubmit"] { border-radius:10px; font-weight:800; }
 [data-testid="stDataFrame"] { border-radius:14px; overflow:hidden; }
 
-/* ========================= TABS ========================= */
 .stTabs [data-baseweb="tab-list"] { gap:8px; }
 .stTabs [data-baseweb="tab"] { border-radius:10px; padding:8px 13px; font-weight:700; }
 
-/* ========================= FOOTER ========================= */
 .footer-note { text-align:center; color:#94a3b8; font-size:.72rem; padding:25px 0 4px; }
 
-@media (max-width:900px) {
-    .hero { min-height: 300px; }
-    .hero-content { width:100%; min-height:300px; padding:28px 24px; background:linear-gradient(90deg,rgba(3,27,54,.93),rgba(3,27,54,.62)); }
-    .hero-title { font-size:2rem; }
+@media (max-width:900px) {.hero { min-height: 300px; }
+                          .hero-content { width:100%; min-height:300px; padding:28px 24px; background:linear-gradient(90deg,rgba(3,27,54,.93),rgba(3,27,54,.62)); }
+                          .hero-title { font-size:2rem; }
 }
 </style>
 """
@@ -610,22 +557,15 @@ def score_gauge(score):
 def decision_card(result):
     decision = result["decision"]
 
-    cfg = {
-        "ACCEPTE": (
-            "#16a34a",
-            "Décision favorable",
-            "Le dossier dépasse le seuil d’acceptation automatique."
-        ),
-        "REVUE": (
-            "#f59e0b",
-            "Revue humaine",
-            "Le dossier se situe dans la zone intermédiaire."
-        ),
-        "REFUSE": (
-            "#ef4444",
-            "Décision défavorable",
-            "Le score est inférieur au seuil de refus."
-        ),
+    cfg = {"ACCEPTE": ("#16a34a", "Décision favorable",
+                       "Le dossier dépasse le seuil d’acceptation automatique."
+           ),
+           "REVUE": ("#f59e0b", "Revue humaine",
+                    "Le dossier se situe dans la zone intermédiaire."
+           ),
+           "REFUSE": ("#ef4444", "Décision défavorable",
+                     "Le score est inférieur au seuil de refus."
+           ),
     }
 
     status_color, title, description = cfg[decision]
@@ -653,9 +593,7 @@ def decision_card(result):
             width:100%;
         ">
 
-            <!-- =========================
-                 COLONNE GAUCHE
-                 ========================= -->
+            <!-- COLONNE GAUCHE -->
 
             <div style="
                 min-width:0;
@@ -707,9 +645,7 @@ def decision_card(result):
             </div>
 
 
-            <!-- =========================
-                 COLONNE DROITE
-                 ========================= -->
+            <!-- COLONNE DROITE -->
 
             <div style="
                 min-width:0;
@@ -822,8 +758,8 @@ def decision_card(result):
 
 def render_sidebar(artifacts):
     with st.sidebar:
-        st.markdown('<div class="sidebar-brand">🏦 Credit Risk</div>', unsafe_allow_html=True)
-        st.markdown('<div class="sidebar-sub">Risk Analytics Platform</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sidebar-brand">🏦 Risque de Crédit</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sidebar-sub">Platforme d'Analyse de Risque</div>', unsafe_allow_html=True)
         st.divider()
 
         st.markdown('<div class="sidebar-section">Architecture</div>', unsafe_allow_html=True)
@@ -831,7 +767,7 @@ def render_sidebar(artifacts):
         st.markdown('<div class="sidebar-card"><div class="sidebar-value">Random Forest</div><div class="sidebar-note">Benchmark machine learning</div></div>', unsafe_allow_html=True)
 
         st.markdown('<div class="sidebar-section">Cadre de décision</div>', unsafe_allow_html=True)
-        for item in ["✓ Acceptation automatique", "✓ Zone de revue humaine", "✓ Refus automatique"]:
+        for item in ["✓ Acceptation automatique", "◈ Zone de revue humaine", "✕ Refus automatique"]:
             st.markdown(f'<div class="sidebar-note" style="margin:7px 0;">{item}</div>', unsafe_allow_html=True)
 
         st.markdown('<div class="sidebar-section">Contrôles</div>', unsafe_allow_html=True)
@@ -839,16 +775,15 @@ def render_sidebar(artifacts):
             st.markdown(f'<div class="sidebar-note" style="margin:6px 0;">• {item}</div>', unsafe_allow_html=True)
 
         st.divider()
-        st.caption(f"{len(artifacts['df']):,} dossiers · German Credit Data")
-        st.caption("Prototype analytique · usage démonstratif")
+        st.caption(f"{len(artifacts['df']):,} dossiers de German Credit Data")
+        st.caption("Prototype analytique · Usage démonstratif")
 
 
 def render_portfolio(artifacts):
     scores = artifacts["score_test"]
-    decisions = np.select(
-        [scores >= artifacts["accept_thresh"], scores >= artifacts["refuse_thresh"]],
-        ["ACCEPTE", "REVUE"],
-        default="REFUSE",
+    decisions = np.select([scores >= artifacts["accept_thresh"], scores >= artifacts["refuse_thresh"]],
+                          ["ACCEPTE", "REVUE"],
+                          default="REFUSE",
     )
     counts = pd.Series(decisions).value_counts().reindex(["ACCEPTE", "REVUE", "REFUSE"], fill_value=0)
     total = int(counts.sum())
@@ -856,7 +791,7 @@ def render_portfolio(artifacts):
     pd_mean = float(np.mean(artifacts["pd_test"]))
 
     st.markdown('<div class="panel-card" style="padding:18px;">', unsafe_allow_html=True)
-    st.markdown('<div class="panel-title">👥 Portefeuille test</div><div class="panel-subtitle">Vue synthétique sur l’échantillon hors entraînement</div>', unsafe_allow_html=True)
+    st.markdown('<div class="panel-title">👥 Portefeuille test</div><div class="panel-subtitle">Vue synthétique sur l’échantillon</div>', unsafe_allow_html=True)
     a, b = st.columns(2)
     with a:
         st.markdown(f'<div class="mini-metric" style="margin-top:12px;"><div class="mini-label">TAUX DE DÉFAUT</div><div class="mini-value">{default_rate:.1%}</div></div>', unsafe_allow_html=True)
@@ -872,7 +807,7 @@ def render_portfolio(artifacts):
 
 def render_app():
     st.set_page_config(
-        page_title="Credit Risk Assessment",
+        page_title="Evaluation du Risque de Crédit",
         page_icon="🏦",
         layout="wide",
         initial_sidebar_state="expanded",
@@ -901,22 +836,14 @@ def render_app():
             <div class="hero-content">
                 <div class="hero-kicker">Risk Analytics · Credit Scoring</div>
                 <div class="hero-title">Credit Risk Assessment</div>
-                <div class="hero-subtitle">Analyse, scoring et décision du risque de crédit à partir d’un scorecard combinant <b>WoE / IV</b>, régression logistique, recalibrage de <b>Platt</b> et <b>Expected Loss</b>.</div>
-                <div class="hero-pills">
-                    <span class="hero-pill">▣ Credit Scoring</span>
-                    <span class="hero-pill">◉ PD</span>
-                    <span class="hero-pill">◈ Expected Loss</span>
-                    <span class="hero-pill">◌ Monitoring</span>
-                    <span class="hero-pill">◍ WoE / IV</span>
-                    <span class="hero-pill">◌ Calibration</span>
-                </div>
+                <div class="hero-subtitle">Analyse, scoring et décision du risque de crédit à partir d’un tableau de bord</div>
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    # ========================= TOP KPIs =========================
+    #  TOP KPIs
     c1, c2, c3, c4 = st.columns(4)
     with c1: kpi_card("AUC", f"{m['AUC_test']:.3f}", "Performance globale du modèle", "↗")
     with c2: kpi_card("GINI", f"{m['Gini_test']:.3f}", "Pouvoir discriminant", "▥")
@@ -929,7 +856,8 @@ def render_app():
         ["📝 Évaluer un dossier", "📊 Monitoring", "🔎 Explicabilité", "🧩 Model Card"]
     )
 
-    # ========================= EVALUATION =========================
+
+    # EVALUATION
     with tab_form:
         left, center, right = st.columns([1.0, 1.35, .92], gap="medium")
 
@@ -939,34 +867,34 @@ def render_app():
             st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
             with st.form("credit_form"):
-                st.markdown("**👤 Informations personnelles**")
+                st.markdown("** Informations personnelles**")
                 age = st.number_input("Âge", 18, 90, 35)
                 dependents = st.number_input("Personnes à charge", 1, 3, 1)
 
-                st.markdown("**💼 Situation professionnelle**")
+                st.markdown("** Situation professionnelle**")
                 employment_since = st.selectbox("Ancienneté professionnelle", list(CODEBOOK["Length of current employment"]["map"].values()))
                 job = st.selectbox("Emploi", list(CODEBOOK["Occupation"]["map"].values()))
 
-                st.markdown("**💳 Situation financière**")
+                st.markdown("** Situation financière**")
                 checking_account_status = st.selectbox("Statut du compte courant", list(CODEBOOK["Account Balance"]["map"].values()))
                 credit_history = st.selectbox("Historique de crédit", list(CODEBOOK["Payment Status of Previous Credit"]["map"].values()))
                 savings_status = st.selectbox("Épargne / valeurs mobilières", list(CODEBOOK["Value Savings/Stocks"]["map"].values()))
                 existing_credits_count = st.number_input("Crédits existants dans cette banque", 1, 6, 1)
 
-                st.markdown("**🏠 Garanties & logement**")
+                st.markdown("** Garanties & logement**")
                 guarantors = st.selectbox("Garant / co-emprunteur", list(CODEBOOK["Guarantors"]["map"].values()))
                 property_ = st.selectbox("Bien le plus valorisable", list(CODEBOOK["Most valuable available asset"]["map"].values()))
                 housing = st.selectbox("Logement", list(CODEBOOK["Type of apartment"]["map"].values()))
                 residence_since = st.number_input("Ancienneté à l’adresse actuelle", 1, 4, 2)
 
-                st.markdown("**💰 Demande de crédit**")
+                st.markdown("** Demande de crédit**")
                 credit_amount = st.number_input("Montant du crédit (€)", 250, 20000, 3000, step=100)
                 duration_months = st.number_input("Durée (mois)", 4, 72, 24)
                 purpose = st.selectbox("Objet du crédit", list(CODEBOOK["Purpose"]["map"].values()))
                 installment_rate_label = st.select_slider("Mensualité en % du revenu disponible", options=[1,2,3,4], format_func=lambda c: {1:"< 20%",2:"20–25%",3:"25–35%",4:"≥ 35%"}[c], value=2)
                 other_installment_plans = st.selectbox("Autres crédits en cours", list(CODEBOOK["Concurrent Credits"]["map"].values()))
 
-                submitted = st.form_submit_button("⚡ Évaluer le dossier", width="stretch", type="primary")
+                submitted = st.form_submit_button(" Évaluer le dossier", width="stretch", type="primary")
             st.markdown('</div>', unsafe_allow_html=True)
 
         result = st.session_state.get("last_result")
@@ -1005,7 +933,7 @@ def render_app():
                 else:
                     st.error("✕ **Dossier refusé automatiquement** selon les seuils du prototype.")
 
-                st.markdown("#### Pourquoi cette décision ?")
+                st.markdown("#### Raison de la décision ?")
                 factors = pd.Series(artifacts["coef_series"]).sort_values()
                 low = factors.head(3)
                 high = factors.tail(3).sort_values(ascending=False)
@@ -1022,16 +950,15 @@ def render_app():
         with right:
             render_portfolio(artifacts)
             st.markdown('<div class="panel-card" style="padding:18px;margin-top:14px;">', unsafe_allow_html=True)
-            st.markdown('<div class="panel-title">💡 Cadre analytique</div>', unsafe_allow_html=True)
-            st.caption("Le scorecard transforme la PD calibrée en score de crédit, puis applique une zone de revue humaine avant la décision finale.")
+            st.markdown('<div class="panel-title"> Cadre analytique</div>', unsafe_allow_html=True)
+            st.caption("Le scorecard transforme la PD (Probabilité de Défaut) calibrée en score de crédit, puis applique une zone de revue humaine avant la décision finale.")
             st.caption("Expected Loss = PD × LGD × EAD")
             st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown('<div class="footer-note">German Credit Data · Prototype Risk Analytics · Les décisions et hypothèses doivent être validées avant tout usage opérationnel.</div>', unsafe_allow_html=True)
 
-    # ========================= MONITORING =========================
+    # MONITORING
     with tab_monitoring:
-        st.markdown("### 📊 Monitoring du modèle")
+        st.markdown("### Monitoring du modèle")
         c1,c2,c3,c4,c5 = st.columns(5)
         for col, label, val, help_ in [
             (c1,"AUC",m['AUC_test'],"Pouvoir discriminant"),(c2,"GINI",m['Gini_test'],"Indice dérivé de l’AUC"),
@@ -1072,7 +999,7 @@ def render_app():
                 height=300,
             )
 
-        st.markdown("#### 💶 Politique économique par bande de PD")
+        st.markdown("#### Politique économique par bande de PD")
         pricing_display = artifacts["pricing_policy"].copy()
         pricing_display["PD_moyenne"] = pricing_display["PD_moyenne"].map(lambda x:f"{x:.2%}")
         pricing_display["taux_defaut_observe"] = pricing_display["taux_defaut_observe"].map(lambda x:f"{x:.2%}")
@@ -1080,24 +1007,22 @@ def render_app():
         pricing_display["plafond_credit_indicatif_DM"] = pricing_display["plafond_credit_indicatif_DM"].map(lambda x:f"{x:,.0f}")
         st.dataframe(pricing_display, width="stretch")
 
-        with st.expander("🛡️ Feuille de route de monitoring production"):
+        with st.expander(" Feuille de route de monitoring production"):
             st.markdown("""
             - Suivre AUC / Gini, KS et calibration de la PD.
             - Contrôler le taux de défaut observé et les migrations de score.
             - Surveiller PSI et stabilité des variables d’entrée.
             - Déclencher des alertes en cas de dérive significative.
-            - Réaliser des backtests par cohorte et comparer prédictions / réalisations.
             """)
-        with st.expander("⚠️ Limites du prototype"):
+        with st.expander(" Limites du prototype"):
             st.markdown("""
             - LGD et EAD sont simplifiées : LGD binaire selon garantie et EAD = montant du crédit.
             - LTI / DTI sont des proxys car le German Credit ne fournit pas de revenu brut.
-            - Une validation croisée temporelle, des stress tests et des modèles LGD/EAD/CCF dédiés seraient nécessaires pour un usage réglementaire.
             """)
 
-    # ========================= EXPLAINABILITY =========================
+    # EXPLAINABILITY
     with tab_explain:
-        st.markdown("### 🔎 Explicabilité du modèle")
+        st.markdown("### Explicabilité du modèle")
         left,right = st.columns(2)
         with left:
             st.markdown("#### Scorecard — coefficients WoE")
@@ -1113,27 +1038,27 @@ def render_app():
 
     # ========================= MODEL CARD =========================
     with tab_model:
-        st.markdown("### 🧩 Model Card")
         a,b = st.columns(2)
         with a:
-            st.markdown("#### 🎯 Objectif")
+            st.markdown("#### Objectif")
             st.write("Évaluer le risque de défaut d’un dossier de crédit et transformer la probabilité de défaut en score, décision et Expected Loss.")
-            st.markdown("#### 🧠 Modèle principal")
+            st.markdown("#### Modèle principal")
             st.markdown("- Régression logistique\n- WoE / IV\n- Variables comportementales clés forcées\n- Platt scaling pour recalibrer la PD")
-            st.markdown("#### 🔬 Benchmark")
+            st.markdown("#### Benchmark")
             st.write("Random Forest utilisé comme référence ML pour comparer la capacité prédictive et l’importance des variables.")
         with b:
-            st.markdown("#### 📊 Données")
-            st.markdown(f"- Dataset : **German Credit Data**\n- Dossiers : **{len(artifacts['df']):,}**\n- Split : **60 % train / 20 % validation / 20 % test**\n- Cible : **default**")
-            st.markdown("#### ⚙️ Cadre de décision")
+            st.markdown("#### Données")
+            st.markdown(f"- Dataset : **German Credit Data**\n- Dossiers : **{len(artifacts['df']):,}**\n- Split : **60 % train / 20 % validation / 20 % test**\n- Cible : **défaut**")
+            st.markdown("#### Cadre de décision")
             st.markdown(f"- Acceptation : score ≥ **{artifacts['accept_thresh']:.1f}**\n- Revue : entre les deux seuils\n- Refus : score < **{artifacts['refuse_thresh']:.1f}**")
-            st.markdown("#### 💰 Expected Loss")
+            st.markdown("#### Expected Loss")
             st.code("Expected Loss = PD × LGD × EAD", language="text")
         st.divider()
-        st.warning("Ce dashboard est un prototype analytique construit à des fins de démonstration. Les hypothèses de LGD/EAD, les proxys LTI/DTI et les seuils de décision doivent être validés avant toute utilisation opérationnelle ou réglementaire.")
-
+       
 
 if __name__ == "__main__":
     render_app()
 
-# Lancement : streamlit run "credit_risk_app_banking.py"
+
+
+# Lancement : streamlit run "credit_risk.py"
