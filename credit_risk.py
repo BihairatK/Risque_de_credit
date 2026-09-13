@@ -637,7 +637,7 @@ def decision_card(result):
                     line-height:1.5;
                     margin-bottom:18px;
                 ">
-                    <b>{title}</b> — {description}
+                    <b>{title}</b> {description}
                 </div>
 
                 {score_gauge(result["credit_score"])}
