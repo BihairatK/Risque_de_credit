@@ -867,34 +867,34 @@ def render_app():
             st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
             with st.form("credit_form"):
-                st.markdown("** Informations personnelles**")
+                st.markdown("**Informations personnelles**")
                 age = st.number_input("Âge", 18, 90, 35)
                 dependents = st.number_input("Personnes à charge", 1, 3, 1)
 
-                st.markdown("** Situation professionnelle**")
+                st.markdown("**Situation professionnelle**")
                 employment_since = st.selectbox("Ancienneté professionnelle", list(CODEBOOK["Length of current employment"]["map"].values()))
                 job = st.selectbox("Emploi", list(CODEBOOK["Occupation"]["map"].values()))
 
-                st.markdown("** Situation financière**")
+                st.markdown("**Situation financière**")
                 checking_account_status = st.selectbox("Statut du compte courant", list(CODEBOOK["Account Balance"]["map"].values()))
                 credit_history = st.selectbox("Historique de crédit", list(CODEBOOK["Payment Status of Previous Credit"]["map"].values()))
                 savings_status = st.selectbox("Épargne / valeurs mobilières", list(CODEBOOK["Value Savings/Stocks"]["map"].values()))
                 existing_credits_count = st.number_input("Crédits existants dans cette banque", 1, 6, 1)
 
-                st.markdown("** Garanties & logement**")
+                st.markdown("**Garanties et Logement**")
                 guarantors = st.selectbox("Garant / co-emprunteur", list(CODEBOOK["Guarantors"]["map"].values()))
                 property_ = st.selectbox("Bien le plus valorisable", list(CODEBOOK["Most valuable available asset"]["map"].values()))
                 housing = st.selectbox("Logement", list(CODEBOOK["Type of apartment"]["map"].values()))
                 residence_since = st.number_input("Ancienneté à l’adresse actuelle", 1, 4, 2)
 
-                st.markdown("** Demande de crédit**")
+                st.markdown("**Demande de crédit**")
                 credit_amount = st.number_input("Montant du crédit (€)", 250, 20000, 3000, step=100)
                 duration_months = st.number_input("Durée (mois)", 4, 72, 24)
                 purpose = st.selectbox("Objet du crédit", list(CODEBOOK["Purpose"]["map"].values()))
                 installment_rate_label = st.select_slider("Mensualité en % du revenu disponible", options=[1,2,3,4], format_func=lambda c: {1:"< 20%",2:"20–25%",3:"25–35%",4:"≥ 35%"}[c], value=2)
                 other_installment_plans = st.selectbox("Autres crédits en cours", list(CODEBOOK["Concurrent Credits"]["map"].values()))
 
-                submitted = st.form_submit_button(" Évaluer le dossier", width="stretch", type="primary")
+                submitted = st.form_submit_button(" **Évaluer le dossier**", width="stretch", type="primary")
             st.markdown('</div>', unsafe_allow_html=True)
 
         result = st.session_state.get("last_result")
