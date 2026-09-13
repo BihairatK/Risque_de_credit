@@ -60,7 +60,7 @@ AUC, Gini, KS, PR-AUC, Brier Score, courbe de calibration et **PSI** (Population
 
 ## Démonstration 
 L'ensemble est packagé dans une **application Streamlit** qui permet d'évaluer un dossier interactivement et d'explorer les onglets monitoring et explicabilité.
-Vous pouvez tester l'application en direct ici : https://risquedecredit-7ogjmvmhh3w3dirmf7qukm.streamlit.app/
+Vous pouvez tester l'application en direct ici : https://risquedecredit-drzc6md8hrqqpzazz6bg9e.streamlit.app/
 
 ## Enseignements tirés 
 
